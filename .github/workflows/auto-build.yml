@@ -9,6 +9,8 @@ on:
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: write
       packages: write
@@ -18,10 +20,14 @@ jobs:
       - name: Check for new release
         id: check_release
         run: |
-          # Get latest version and release date from upstream
           RESPONSE=$(curl -s https://api.github.com/repos/papra-hq/papra/releases/latest)
-          TAG=$(echo $RESPONSE | jq -r .tag_name)
+          # Get tag, remove any leading 'v', and strip out characters that aren't safe for Docker tags
+          RAW_TAG=$(echo $RESPONSE | jq -r .tag_name)
+          CLEAN_TAG=$(echo $RAW_TAG | sed 's/[^a-zA-Z0-9._-]/-/g')
           PUBLISHED_AT=$(echo $RESPONSE | jq -r .published_at)
+          
+          # ... rest of your logic, but use $CLEAN_TAG for tagging ...
+          echo "tag=$CLEAN_TAG" >> $GITHUB_OUTPUT
           
           # Compare with current version
           if [ -f latest-version.txt ]; then
