@@ -24,8 +24,8 @@ jobs:
           RAW_TAG=$(echo "$RESPONSE" | jq -r .tag_name)
           PUBLISHED_AT=$(echo "$RESPONSE" | jq -r .published_at)
           
-          # Sanitize tag: replace any non-safe character with '-'
-          CLEAN_TAG=$(echo "$RAW_TAG" | sed 's/[^a-zA-Z0-9._-]/-/g')
+          # Sanitize tag: replace invalid chars with '-', then remove leading/trailing hyphens/dots
+          CLEAN_TAG=$(echo "$RAW_TAG" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/^-*//;s/-*$//;s/^\.*//;s/\.*$//')
           
           # Check for current version
           if [ -f latest-version.txt ]; then
