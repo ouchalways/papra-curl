@@ -26,10 +26,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
+        if: steps.check_release.outputs.should_build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          # Explicitly set to x64 only
           platforms: linux/amd64
-          tags: ghcr.io/${{ github.repository_owner }}/papra-with-curl:latest
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/papra-with-curl:${{ steps.check_release.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/papra-with-curl:latest
