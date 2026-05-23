@@ -2,52 +2,50 @@ name: Auto-Build on Upstream Release
 
 on:
   schedule:
-    # Run once a day at midnight
     - cron: '0 0 * * *'
-  workflow_dispatch: # Allows manual testing
+  workflow_dispatch:
 
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: write
       packages: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
 
       - name: Check for new release
         id: check_release
         run: |
+          # Fetch release data
           RESPONSE=$(curl -s https://api.github.com/repos/papra-hq/papra/releases/latest)
-          # Get tag, remove any leading 'v', and strip out characters that aren't safe for Docker tags
-          RAW_TAG=$(echo $RESPONSE | jq -r .tag_name)
-          CLEAN_TAG=$(echo $RAW_TAG | sed 's/[^a-zA-Z0-9._-]/-/g')
-          PUBLISHED_AT=$(echo $RESPONSE | jq -r .published_at)
+          RAW_TAG=$(echo "$RESPONSE" | jq -r .tag_name)
+          PUBLISHED_AT=$(echo "$RESPONSE" | jq -r .published_at)
           
-          # ... rest of your logic, but use $CLEAN_TAG for tagging ...
-          echo "tag=$CLEAN_TAG" >> $GITHUB_OUTPUT
+          # Sanitize tag: replace any non-safe character with '-'
+          CLEAN_TAG=$(echo "$RAW_TAG" | sed 's/[^a-zA-Z0-9._-]/-/g')
           
-          # Compare with current version
+          # Check for current version
           if [ -f latest-version.txt ]; then
             CURRENT=$(cat latest-version.txt)
           else
             CURRENT="none"
           fi
           
-          # Check if 48 hours have passed since release
+          # Calculate if 48 hours have passed
           PUB_TS=$(date -d "$PUBLISHED_AT" +%s)
           NOW_TS=$(date +%s)
           DIFF_HOURS=$(( ($NOW_TS - $PUB_TS) / 3600 ))
           
-          if [ "$TAG" != "$CURRENT" ] && [ $DIFF_HOURS -ge 48 ]; then
+          if [ "$CLEAN_TAG" != "$CURRENT" ] && [ $DIFF_HOURS -ge 48 ]; then
             echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "$TAG" > latest-version.txt
+            echo "$CLEAN_TAG" > latest-version.txt
           else
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "tag=$CLEAN_TAG" >> $GITHUB_OUTPUT
 
       - name: Build and Push
         if: steps.check_release.outputs.should_build == 'true'
@@ -57,10 +55,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/papra-with-curl:${{ steps.check_release.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/papra-with-curl:latest
-        env:
-          DOCKER_BUILD_TAG: ${{ steps.check_release.outputs.tag }}
+            ghcr.io/ouchalways/papra-with-curl:${{ steps.check_release.outputs.tag }}
+            ghcr.io/ouchalways/papra-with-curl:latest
 
       - name: Commit version update
         if: steps.check_release.outputs.should_build == 'true'
