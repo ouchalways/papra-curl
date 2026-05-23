@@ -1,5 +1,4 @@
-# Define the markdown content for the README
-readme_content = """# Papra with Curl
+## Papra with curl
 
 This repository provides an automated, hardened, and updated container image based on `ghcr.io/papra-hq/papra`. The primary purpose of this image is to provide the `curl` utility, which is not included in the base upstream image, enabling broader compatibility for specific integration workflows.
 
