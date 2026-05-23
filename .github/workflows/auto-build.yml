@@ -19,22 +19,19 @@ jobs:
       - name: Check for new release
         id: check_release
         run: |
-          # Fetch release data
           RESPONSE=$(curl -s https://api.github.com/repos/papra-hq/papra/releases/latest)
           RAW_TAG=$(echo "$RESPONSE" | jq -r .tag_name)
           PUBLISHED_AT=$(echo "$RESPONSE" | jq -r .published_at)
           
-          # Sanitize tag: replace invalid chars with '-', then remove leading/trailing hyphens/dots
+          # Sanitize tag
           CLEAN_TAG=$(echo "$RAW_TAG" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/^-*//;s/-*$//;s/^\.*//;s/\.*$//')
           
-          # Check for current version
           if [ -f latest-version.txt ]; then
             CURRENT=$(cat latest-version.txt)
           else
             CURRENT="none"
           fi
           
-          # Calculate if 48 hours have passed
           PUB_TS=$(date -d "$PUBLISHED_AT" +%s)
           NOW_TS=$(date +%s)
           DIFF_HOURS=$(( ($NOW_TS - $PUB_TS) / 3600 ))
@@ -46,6 +43,14 @@ jobs:
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
           echo "tag=$CLEAN_TAG" >> $GITHUB_OUTPUT
+
+      - name: Login to GitHub Container Registry
+        if: steps.check_release.outputs.should_build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Push
         if: steps.check_release.outputs.should_build == 'true'
