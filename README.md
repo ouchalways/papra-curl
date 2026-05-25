@@ -22,4 +22,4 @@ This repository provides an automated, hardened, and updated container image bas
 You can pull the latest version directly from GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/<YOUR_GITHUB_USERNAME>/papra-with-curl:latest
+docker pull ghcr.io/ouchalways/papra-with-curl:latest
