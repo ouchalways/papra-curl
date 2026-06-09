@@ -36,7 +36,7 @@ jobs:
           NOW_TS=$(date +%s)
           DIFF_HOURS=$(( ($NOW_TS - $PUB_TS) / 3600 ))
           
-          if [ "$CLEAN_TAG" != "$CURRENT" ] && [ $DIFF_HOURS -ge 48 ]; then
+          if [ "$CLEAN_TAG" != "$CURRENT" ] && [ $DIFF_HOURS -ge 24 ]; then
             echo "should_build=true" >> $GITHUB_OUTPUT
             echo "$CLEAN_TAG" > latest-version.txt
           else
