@@ -1,1 +1,1 @@
-papra-app-26.5.0
+papra-app-26.6.0
