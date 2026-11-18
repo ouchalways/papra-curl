@@ -5,48 +5,64 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check for new release
         id: check_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RESPONSE=$(curl -s https://api.github.com/repos/papra-hq/papra/releases/latest)
+          RESPONSE=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/papra-hq/papra/releases/latest)
           RAW_TAG=$(echo "$RESPONSE" | jq -r .tag_name)
           PUBLISHED_AT=$(echo "$RESPONSE" | jq -r .published_at)
-          
+
+          if [ -z "$RAW_TAG" ] || [ "$RAW_TAG" == "null" ] || [ -z "$PUBLISHED_AT" ] || [ "$PUBLISHED_AT" == "null" ]; then
+            echo "Failed to fetch valid release metadata from GitHub API."
+            exit 1
+          fi
+
           # Sanitize tag
           CLEAN_TAG=$(echo "$RAW_TAG" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/^-*//;s/-*$//;s/^\.*//;s/\.*$//')
-          
+
           if [ -f latest-version.txt ]; then
             CURRENT=$(cat latest-version.txt)
           else
             CURRENT="none"
           fi
-          
+
           PUB_TS=$(date -d "$PUBLISHED_AT" +%s)
           NOW_TS=$(date +%s)
-          DIFF_HOURS=$(( ($NOW_TS - $PUB_TS) / 3600 ))
-          
-          if [ "$CLEAN_TAG" != "$CURRENT" ] && [ $DIFF_HOURS -ge 24 ]; then
-            echo "should_build=true" >> $GITHUB_OUTPUT
+          DIFF_HOURS=$(( (NOW_TS - PUB_TS) / 3600 ))
+
+          if [ "$CLEAN_TAG" != "$CURRENT" ] && [ "$DIFF_HOURS" -ge 24 ]; then
+            echo "New release ready ($CLEAN_TAG, published ${DIFF_HOURS}h ago)."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
             echo "$CLEAN_TAG" > latest-version.txt
           else
-            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "Skipping build (tag: $CLEAN_TAG, current: $CURRENT, age: ${DIFF_HOURS}h)."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "tag=$CLEAN_TAG" >> $GITHUB_OUTPUT
+          echo "tag=$CLEAN_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        if: steps.check_release.outputs.should_build == 'true'
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
         if: steps.check_release.outputs.should_build == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -54,7 +70,7 @@ jobs:
 
       - name: Build and Push
         if: steps.check_release.outputs.should_build == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -62,12 +78,14 @@ jobs:
           tags: |
             ghcr.io/ouchalways/papra-with-curl:${{ steps.check_release.outputs.tag }}
             ghcr.io/ouchalways/papra-with-curl:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Commit version update
         if: steps.check_release.outputs.should_build == 'true'
         run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add latest-version.txt
           git commit -m "Update papra to version ${{ steps.check_release.outputs.tag }}"
           git push
